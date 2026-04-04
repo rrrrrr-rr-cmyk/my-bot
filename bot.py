@@ -161,7 +161,7 @@ async def cb(call: types.CallbackQuery):
     elif call.data == "i2c":
         await call.message.answer("Введи ID")
     elif call.data == "gen":
-        await call.message.answer("Введите код и количество\nПример:\nXABC123 100")
+        await call.message.answer("Введите код и количество следующих кодов\nПример:\nXABC123 100")
     await call.answer()
 
 # ===== ЛОГИКА =====
