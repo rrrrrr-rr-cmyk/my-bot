@@ -199,6 +199,9 @@ async def handle(msg: types.Message):
                 await msg.answer("❌ Неверный код", reply_markup=menu())
                 return
 
+            # 🔥 сообщение ожидания
+            wait_msg = await msg.answer("⏳ Генерирую... 0%")
+
             result = ""
             for i in range(count):
                 cur_id = start_id + i
@@ -207,9 +210,28 @@ async def handle(msg: types.Message):
                     link = f"https://link.brawlstars.com/?tag={new_code}"
                     result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
 
+                # 🔥 обновление процентов
+                if count >= 10 and i % (count // 10) == 0:
+                    percent = int((i / count) * 100)
+                    await wait_msg.edit_text(f"⏳ Генерирую... {percent}%")
+
+                # 🔥 небольшая задержка
+                await asyncio.sleep(0.05)
+
+            await wait_msg.edit_text("⏳ Генерирую... 100%")
+
+            # 🔥 задержка перед отправкой (до 10 сек)
+            await asyncio.sleep(min(3, count * 0.01))
+
             filename = f"brawl_codes_{count}.txt"
-            file = types.BufferedInputFile(result.encode(), filename=filename)
-            await msg.answer_document(file)
+
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(result)
+
+            with open(filename, "rb") as f:
+                await msg.answer_document(f)
+
+            await wait_msg.delete()
 
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
             return
@@ -248,7 +270,7 @@ async def web_server():
 
 # ===== MAIN =====
 async def main():
-    kill_old_process()  # 👈 ДОБАВЛЕНО
+    kill_old_process()
     await delete_webhook_on_start()
     await set_commands(bot)
     await web_server()
