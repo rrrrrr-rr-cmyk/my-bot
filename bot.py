@@ -112,9 +112,9 @@ async def handle(msg: types.Message):
     parts = text.split()
     mode = user_modes.get(msg.from_user.id)
 
-    # ===== ДОБАВЛЕНО: ЖЁСТКАЯ ПРОВЕРКА =====
-    if mode is None:
-        await msg.answer("🆔 Сначала выбери действие 👇", reply_markup=menu())
+    # ===== ДОБАВЛЕНО: БЕЗ КНОПКИ НЕЛЬЗЯ =====
+    if mode not in ["gen", "c2i", "i2c"]:
+        await msg.answer("❌ Сначала нажми кнопку 👇", reply_markup=menu())
         return
 
     try:
@@ -153,7 +153,6 @@ async def handle(msg: types.Message):
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
             return
 
-        # ===== КОД → ID =====
         elif mode == "c2i":
             id_val = converter.to_id(text)
 
@@ -165,7 +164,6 @@ async def handle(msg: types.Message):
             user_modes[msg.from_user.id] = None  # ← ДОБАВЛЕНО
             return
 
-        # ===== ID → КОД =====
         elif mode == "i2c":
             if text.isdigit():
                 code = converter.to_code(int(text))
