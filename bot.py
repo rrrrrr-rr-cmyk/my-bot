@@ -1,12 +1,14 @@
 import json
 import os
 import asyncio
+import io
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from aiogram.filters import Command
 
-TOKEN = "7966858937:AAHvra5CspAlmw29Q3CcrLi4xdhzpwy0Hms"
+TOKEN = "7966858937:AAHvra5CspAlmw29Q3CcrLi4xdhzpwy0Hms
+"
 ADMIN_ID = 1085706185
 
 bot = Bot(token=TOKEN)
@@ -83,11 +85,21 @@ converter = LongToCodeConverter()
 async def start(msg: types.Message):
     user_modes[msg.from_user.id] = None
 
-    await msg.answer("👋 Привет! Выбери действие 👇")
+    await msg.answer(
+        "👋 Привет!\n\n"
+        "Я бот, который поможет тебе работать с кодами команд в Brawl Stars 🎮\n\n"
+        "С моей помощью ты можешь:\n"
+        "🔑 преобразовать код команды в ID\n"
+        "🆔 преобразовать ID обратно в код\n"
+        "📈 генерировать следующие коды на основе твоего\n\n"
+        "Если что-то не понятно, напиши /help 📘\n"
+        "Я делаю всё быстро и точно. Выбери действие ниже 👇"
+    )
+
     await msg.answer("👇 Выбери действие:", reply_markup=menu())
 
 # ===== КНОПКИ =====
-@dp.callback_query()
+@dp.callback_query(lambda c: c.data in ["c2i", "i2c", "gen"])
 async def cb(call: types.CallbackQuery):
     user_id = call.from_user.id
 
@@ -112,7 +124,7 @@ async def handle(msg: types.Message):
     parts = text.split()
     mode = user_modes.get(msg.from_user.id)
 
-    # ===== ДОБАВЛЕНО: БЕЗ КНОПКИ НЕЛЬЗЯ =====
+    # ❗ только через кнопки
     if mode not in ["gen", "c2i", "i2c"]:
         await msg.answer("❌ Сначала нажми кнопку 👇", reply_markup=menu())
         return
@@ -139,20 +151,18 @@ async def handle(msg: types.Message):
                 link = f"https://link.brawlstars.com/?tag={new_code}"
                 result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
 
-            filename = f"codes_{count}.txt"
+            file = io.BytesIO(result.encode())
+            file.name = f"codes_{count}.txt"
 
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(result)
+            await msg.answer_document(file)
 
-            with open(filename, "rb") as f:
-                await msg.answer_document(f)
-
-            user_modes[msg.from_user.id] = None  # ← ДОБАВЛЕНО
+            user_modes[msg.from_user.id] = None
 
             await wait_msg.delete()
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
             return
 
+        # ===== КОД → ID =====
         elif mode == "c2i":
             id_val = converter.to_id(text)
 
@@ -161,9 +171,10 @@ async def handle(msg: types.Message):
             else:
                 await msg.answer(f"ID: {id_val}", reply_markup=menu())
 
-            user_modes[msg.from_user.id] = None  # ← ДОБАВЛЕНО
+            user_modes[msg.from_user.id] = None
             return
 
+        # ===== ID → КОД =====
         elif mode == "i2c":
             if text.isdigit():
                 code = converter.to_code(int(text))
@@ -175,7 +186,7 @@ async def handle(msg: types.Message):
             else:
                 await msg.answer("❌ Введи ID", reply_markup=menu())
 
-            user_modes[msg.from_user.id] = None  # ← ДОБАВЛЕНО
+            user_modes[msg.from_user.id] = None
             return
 
     except Exception as e:
