@@ -28,7 +28,7 @@ dp = Dispatcher()
 users = load_users()
 online_users = set()
 
-# ===== УДАЛЕНИЕ WEBHOOK (ДОБАВЛЕНО) =====
+# ===== УДАЛЕНИЕ WEBHOOK =====
 async def delete_webhook_on_start():
     await bot.delete_webhook(drop_pending_updates=True)
 
@@ -186,13 +186,15 @@ async def handle(msg: types.Message):
                 cur_id = start_id + i
                 new_code = converter.to_code(cur_id)
                 if new_code:
-                  link = f"https://link.brawlstars.com/?tag={new_code}"
-                  result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
+                    link = f"https://link.brawlstars.com/?tag={new_code}"
+                    result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
+
+            # 🔥 РАЗБИЕНИЕ НА СООБЩЕНИЯ
             for i in range(0, len(result), 4000):
                 await msg.answer(result[i:i+4000])
 
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
-
+            return
 
         elif text.upper().startswith("X"):
             id_val = converter.to_id(text)
@@ -222,14 +224,13 @@ async def web_server():
     runner = web.AppRunner(app)
     await runner.setup()
 
-    import os
     port = int(os.environ.get("PORT", 8080))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
 # ===== MAIN =====
 async def main():
-    await delete_webhook_on_start()  # 👈 ВОТ ЕДИНСТВЕННОЕ ДОБАВЛЕНИЕ
+    await delete_webhook_on_start()
     await set_commands(bot)
     await web_server()
     print("Бот запущен 🚀")
