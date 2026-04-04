@@ -189,9 +189,10 @@ async def handle(msg: types.Message):
                     link = f"https://link.brawlstars.com/?tag={new_code}"
                     result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
 
-            # 🔥 РАЗБИЕНИЕ НА СООБЩЕНИЯ
-            for i in range(0, len(result), 4000):
-                await msg.answer(result[i:i+4000])
+            # 🔥 ОТПРАВКА ФАЙЛОМ
+            filename = f"brawl_codes_{count}.txt"
+            file = types.BufferedInputFile(result.encode(), filename=filename)
+            await msg.answer_document(file)
 
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
             return
