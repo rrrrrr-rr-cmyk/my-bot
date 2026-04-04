@@ -1,4 +1,3 @@
-
 import json
 import os
 import asyncio
@@ -28,6 +27,10 @@ dp = Dispatcher()
 
 users = load_users()
 online_users = set()
+
+# ===== УДАЛЕНИЕ WEBHOOK (ДОБАВЛЕНО) =====
+async def delete_webhook_on_start():
+    await bot.delete_webhook(drop_pending_updates=True)
 
 # ===== КОНВЕРТЕР =====
 class LongToCodeConverter:
@@ -222,6 +225,7 @@ async def web_server():
 
 # ===== MAIN =====
 async def main():
+    await delete_webhook_on_start()  # 👈 ВОТ ЕДИНСТВЕННОЕ ДОБАВЛЕНИЕ
     await set_commands(bot)
     await web_server()
     print("Бот запущен 🚀")
