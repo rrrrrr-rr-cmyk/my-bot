@@ -5,19 +5,6 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from aiogram.filters import Command
-from aiohttp import web
-
-USERS_FILE = "users.json"
-
-def load_users():
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "r") as f:
-            return set(json.load(f))
-    return set()
-
-def save_users(users):
-    with open(USERS_FILE, "w") as f:
-        json.dump(list(users), f)
 
 TOKEN = "7966858937:AAEJot3qSamrS36WDIhdm4C7Xp57JyJDne0"
 ADMIN_ID = 1085706185
@@ -25,15 +12,17 @@ ADMIN_ID = 1085706185
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-users = load_users()
-online_users = set()
 user_modes = {}
 
-# ===== УДАЛЕНИЕ WEBHOOK =====
-async def delete_webhook_on_start():
-    await bot.delete_webhook(drop_pending_updates=True)
+# ===== КНОПКИ =====
+def menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔑 Код → ID", callback_data="c2i")],
+        [InlineKeyboardButton(text="🆔 ID → Код", callback_data="i2c")],
+        [InlineKeyboardButton(text="📈 Генерация кодов", callback_data="gen")]
+    ])
 
-# ===== КОНВЕРТЕР =====
+# ===== КОНВЕРТЕР (НЕ ТРОГАЛ) =====
 class LongToCodeConverter:
     CHARS = "QWERTYUPASDFGHJKLZCVBNM23456789"
     TAG = "X"
@@ -89,70 +78,18 @@ class LongToCodeConverter:
 
 converter = LongToCodeConverter()
 
-# ===== КНОПКИ =====
-def menu():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔑 Код → ID", callback_data="c2i")],
-        [InlineKeyboardButton(text="🆔 ID → Код", callback_data="i2c")],
-        [InlineKeyboardButton(text="📈 Генерация кодов", callback_data="gen")]
-    ])
-
-# ===== TELEGRAM MENU =====
-async def set_commands(bot: Bot):
-    commands = [
-        BotCommand(command="start", description="Запустить бота"),
-        BotCommand(command="help", description="Как пользоваться"),
-        BotCommand(command="stats", description="Статистика (админ)"),
-    ]
-    await bot.set_my_commands(commands)
-
 # ===== START =====
 @dp.message(Command("start"))
 async def start(msg: types.Message):
-    user_id = msg.from_user.id
-    user_modes[user_id] = None
-
-    users.add(user_id)
-    save_users(users)
-    online_users.add(user_id)
+    user_modes[msg.from_user.id] = None
 
     await msg.answer(
         "👋 Привет!\n\n"
-        "Я бот, который поможет тебе работать с кодами команд в Brawl Stars 🎮\n\n"
-        "С моей помощью ты можешь:\n"
-        "🔑 преобразовать код команды в ID\n"
-        "🆔 преобразовать ID обратно в код\n"
-        "📈 генерировать следующие коды на основе твоего\n\n"
-        "Если что-то не понятно, напиши /help 📘\n"
-        "Я делаю всё быстро и точно. Выбери действие ниже 👇"
+        "Я бот для работы с кодами Brawl Stars\n\n"
+        "Выбери действие 👇"
     )
 
     await msg.answer("👇 Выбери действие:", reply_markup=menu())
-
-# ===== HELP =====
-@dp.message(Command("help"))
-async def help_cmd(msg: types.Message):
-    await msg.answer(
-        "📘 Как пользоваться:\n\n"
-        "🔑 Код → ID\n"
-        "XZZJHPS → ID\n\n"
-        "🆔 ID → Код\n"
-        "123456789 → Код\n\n"
-        "📈 Генерация кодов\n"
-        "XZZJHPS 3\n\n",
-        reply_markup=menu()
-    )
-
-# ===== СТАТИСТИКА =====
-@dp.message(Command("stats"))
-async def stats(msg: types.Message):
-    if msg.from_user.id != ADMIN_ID:
-        return
-
-    await msg.answer(
-        f"👥 Всего пользователей: {len(users)}\n"
-        f"🟢 Онлайн: {len(online_users)}"
-    )
 
 # ===== КНОПКИ =====
 @dp.callback_query()
@@ -169,11 +106,11 @@ async def cb(call: types.CallbackQuery):
 
     elif call.data == "gen":
         user_modes[user_id] = "gen"
-        await call.message.answer("Введите код и количество следующих кодов\nПример:\nXABC123 100")
+        await call.message.answer("Введите код и количество\nПример:\nXABC123 10")
 
     await call.answer()
 
-# ===== ЛОГИКА =====
+# ===== ОСНОВНАЯ ЛОГИКА =====
 @dp.message()
 async def handle(msg: types.Message):
     text = msg.text.strip()
@@ -181,6 +118,7 @@ async def handle(msg: types.Message):
     mode = user_modes.get(msg.from_user.id)
 
     try:
+        # ===== ГЕНЕРАЦИЯ =====
         if mode == "gen" and len(parts) == 2:
             code = parts[0].upper()
             count = int(parts[1])
@@ -188,7 +126,6 @@ async def handle(msg: types.Message):
             start_id = abs(hash(code)) % (10**9)
 
             wait_msg = await msg.answer("⏳ Генерирую...")
-
             await asyncio.sleep(2)
 
             result = ""
@@ -214,6 +151,7 @@ async def handle(msg: types.Message):
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
             return
 
+        # ===== КОД → ID =====
         elif mode == "c2i":
             id_val = converter.to_id(text)
             if id_val == -1:
@@ -222,6 +160,7 @@ async def handle(msg: types.Message):
                 await msg.answer(f"ID: {id_val}", reply_markup=menu())
             return
 
+        # ===== ID → КОД =====
         elif mode == "i2c":
             if text.isdigit():
                 code = converter.to_code(int(text))
@@ -238,25 +177,10 @@ async def handle(msg: types.Message):
 
     except Exception as e:
         print(e)
-        await msg.answer("❌ Ошибка ввода", reply_markup=menu())
+        await msg.answer("❌ Ошибка", reply_markup=menu())
 
-# ===== WEB SERVER =====
-async def web_server():
-    app = web.Application()
-    app.router.add_get('/', lambda request: web.Response(text="Bot is alive!"))
-
-    runner = web.AppRunner(app)
-    await runner.setup()
-
-    port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-
-# ===== MAIN =====
+# ===== ЗАПУСК =====
 async def main():
-    await delete_webhook_on_start()
-    await set_commands(bot)
-    await web_server()
     print("Бот запущен 🚀")
     await dp.start_polling(bot)
 
