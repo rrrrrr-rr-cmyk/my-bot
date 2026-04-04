@@ -1,7 +1,6 @@
 import json
 import os
 import asyncio
-import signal
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
@@ -28,25 +27,11 @@ dp = Dispatcher()
 
 users = load_users()
 online_users = set()
+user_modes = {}
 
 # ===== УДАЛЕНИЕ WEBHOOK =====
 async def delete_webhook_on_start():
     await bot.delete_webhook(drop_pending_updates=True)
-
-# ===== УБИЙСТВО СТАРОГО ПРОЦЕССА =====
-PID_FILE = "bot.pid"
-
-def kill_old_process():
-    if os.path.exists(PID_FILE):
-        try:
-            with open(PID_FILE, "r") as f:
-                old_pid = int(f.read())
-            os.kill(old_pid, signal.SIGTERM)
-        except:
-            pass
-
-    with open(PID_FILE, "w") as f:
-        f.write(str(os.getpid()))
 
 # ===== КОНВЕРТЕР =====
 class LongToCodeConverter:
@@ -59,12 +44,10 @@ class LongToCodeConverter:
     def _convert(self, val):
         res = []
         base = len(self.CHARS)
-
         while val > 0:
             idx = val % base
             res.insert(0, self.CHARS[idx])
             val //= base
-
         return ''.join(res)
 
     def to_code(self, id_val):
@@ -127,6 +110,8 @@ async def set_commands(bot: Bot):
 @dp.message(Command("start"))
 async def start(msg: types.Message):
     user_id = msg.from_user.id
+    user_modes[user_id] = None
+
     users.add(user_id)
     save_users(users)
     online_users.add(user_id)
@@ -172,12 +157,20 @@ async def stats(msg: types.Message):
 # ===== КНОПКИ =====
 @dp.callback_query()
 async def cb(call: types.CallbackQuery):
+    user_id = call.from_user.id
+
     if call.data == "c2i":
+        user_modes[user_id] = "c2i"
         await call.message.answer("Введи код (пример: XABC123)")
+
     elif call.data == "i2c":
+        user_modes[user_id] = "i2c"
         await call.message.answer("Введи ID")
+
     elif call.data == "gen":
+        user_modes[user_id] = "gen"
         await call.message.answer("Введите код и количество следующих кодов\nПример:\nXABC123 100")
+
     await call.answer()
 
 # ===== ЛОГИКА =====
@@ -185,46 +178,31 @@ async def cb(call: types.CallbackQuery):
 async def handle(msg: types.Message):
     text = msg.text.strip()
     parts = text.split()
+    mode = user_modes.get(msg.from_user.id)
 
     try:
-        if len(parts) == 2:
+        if mode == "gen" and len(parts) == 2:
             code = parts[0].upper()
             count = int(parts[1])
 
-            start_id = converter.to_id(code)
+            start_id = abs(hash(code)) % (10**9)
 
-            if start_id == -1:
-                await msg.answer("❌ Неверный код", reply_markup=menu())
-                return
+            wait_msg = await msg.answer("⏳ Генерирую...")
 
-            wait_msg = await msg.answer("⏳ Генерирую... 0%")
+            await asyncio.sleep(2)
 
             result = ""
             for i in range(count):
                 cur_id = start_id + i
                 new_code = converter.to_code(cur_id)
-                if new_code:
-                    link = f"https://link.brawlstars.com/?tag={new_code}"
-                    result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
 
-                # 🔥 ФИКС ПРОЦЕНТОВ
-                if count >= 10 and i % max(1, count // 5) == 0:
-                    percent = int((i / count) * 100)
-                    try:
-                        await wait_msg.edit_text(f"⏳ Генерирую... {percent}%")
-                    except:
-                        pass
+                if not new_code:
+                    new_code = f"INVALID_{cur_id}"
 
-                await asyncio.sleep(0.05)
+                link = f"https://link.brawlstars.com/?tag={new_code}"
+                result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
 
-            try:
-                await wait_msg.edit_text("⏳ Генерирую... 100%")
-            except:
-                pass
-
-            await asyncio.sleep(min(3, count * 0.01))
-
-            filename = f"brawl_codes_{count}.txt"
+            filename = f"codes_{count}.txt"
 
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(result)
@@ -233,28 +211,33 @@ async def handle(msg: types.Message):
                 await msg.answer_document(f)
 
             await wait_msg.delete()
-
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
             return
 
-        elif text.upper().startswith("X"):
+        elif mode == "c2i":
             id_val = converter.to_id(text)
             if id_val == -1:
                 await msg.answer("❌ Неверный код", reply_markup=menu())
             else:
                 await msg.answer(f"ID: {id_val}", reply_markup=menu())
+            return
 
-        elif text.isdigit():
-            code = converter.to_code(int(text))
-            if code:
-                await msg.answer(f"Код: {code}", reply_markup=menu())
+        elif mode == "i2c":
+            if text.isdigit():
+                code = converter.to_code(int(text))
+                if code:
+                    await msg.answer(f"Код: {code}", reply_markup=menu())
+                else:
+                    await msg.answer("❌ Ошибка", reply_markup=menu())
             else:
-                await msg.answer("❌ Ошибка", reply_markup=menu())
+                await msg.answer("❌ Введи ID", reply_markup=menu())
+            return
 
         else:
-            await msg.answer("❌ Неверный формат", reply_markup=menu())
+            await msg.answer("🆔 Сначала выбери действие 👇", reply_markup=menu())
 
-    except:
+    except Exception as e:
+        print(e)
         await msg.answer("❌ Ошибка ввода", reply_markup=menu())
 
 # ===== WEB SERVER =====
@@ -271,14 +254,11 @@ async def web_server():
 
 # ===== MAIN =====
 async def main():
-    kill_old_process()
     await delete_webhook_on_start()
     await set_commands(bot)
     await web_server()
     print("Бот запущен 🚀")
-    print("Polling started")
     await dp.start_polling(bot)
 
-# ===== START =====
 if __name__ == "__main__":
     asyncio.run(main())
