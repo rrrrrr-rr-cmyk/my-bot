@@ -22,7 +22,7 @@ def menu():
         [InlineKeyboardButton(text="📈 Генерация кодов", callback_data="gen")]
     ])
 
-# ===== КОНВЕРТЕР (НЕ ТРОГАЛ) =====
+# ===== КОНВЕРТЕР =====
 class LongToCodeConverter:
     CHARS = "QWERTYUPASDFGHJKLZCVBNM23456789"
     TAG = "X"
@@ -83,12 +83,7 @@ converter = LongToCodeConverter()
 async def start(msg: types.Message):
     user_modes[msg.from_user.id] = None
 
-    await msg.answer(
-        "👋 Привет!\n\n"
-        "Я бот для работы с кодами Brawl Stars\n\n"
-        "Выбери действие 👇"
-    )
-
+    await msg.answer("👋 Привет! Выбери действие 👇")
     await msg.answer("👇 Выбери действие:", reply_markup=menu())
 
 # ===== КНОПКИ =====
@@ -110,12 +105,17 @@ async def cb(call: types.CallbackQuery):
 
     await call.answer()
 
-# ===== ОСНОВНАЯ ЛОГИКА =====
+# ===== ЛОГИКА =====
 @dp.message()
 async def handle(msg: types.Message):
     text = msg.text.strip()
     parts = text.split()
     mode = user_modes.get(msg.from_user.id)
+
+    # ===== ДОБАВЛЕНО: ЖЁСТКАЯ ПРОВЕРКА =====
+    if mode is None:
+        await msg.answer("🆔 Сначала выбери действие 👇", reply_markup=menu())
+        return
 
     try:
         # ===== ГЕНЕРАЦИЯ =====
@@ -147,6 +147,8 @@ async def handle(msg: types.Message):
             with open(filename, "rb") as f:
                 await msg.answer_document(f)
 
+            user_modes[msg.from_user.id] = None  # ← ДОБАВЛЕНО
+
             await wait_msg.delete()
             await msg.answer("👇 Выбери действие:", reply_markup=menu())
             return
@@ -154,26 +156,29 @@ async def handle(msg: types.Message):
         # ===== КОД → ID =====
         elif mode == "c2i":
             id_val = converter.to_id(text)
+
             if id_val == -1:
                 await msg.answer("❌ Неверный код", reply_markup=menu())
             else:
                 await msg.answer(f"ID: {id_val}", reply_markup=menu())
+
+            user_modes[msg.from_user.id] = None  # ← ДОБАВЛЕНО
             return
 
         # ===== ID → КОД =====
         elif mode == "i2c":
             if text.isdigit():
                 code = converter.to_code(int(text))
+
                 if code:
                     await msg.answer(f"Код: {code}", reply_markup=menu())
                 else:
                     await msg.answer("❌ Ошибка", reply_markup=menu())
             else:
                 await msg.answer("❌ Введи ID", reply_markup=menu())
-            return
 
-        else:
-            await msg.answer("🆔 Сначала выбери действие 👇", reply_markup=menu())
+            user_modes[msg.from_user.id] = None  # ← ДОБАВЛЕНО
+            return
 
     except Exception as e:
         print(e)
