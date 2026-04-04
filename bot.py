@@ -41,11 +41,9 @@ def kill_old_process():
         try:
             with open(PID_FILE, "r") as f:
                 old_pid = int(f.read())
-
-            print(f"Пытаюсь убить старый процесс: {old_pid}")
             os.kill(old_pid, signal.SIGTERM)
-        except Exception as e:
-            print(f"Не удалось убить старый процесс: {e}")
+        except:
+            pass
 
     with open(PID_FILE, "w") as f:
         f.write(str(os.getpid()))
@@ -199,7 +197,6 @@ async def handle(msg: types.Message):
                 await msg.answer("❌ Неверный код", reply_markup=menu())
                 return
 
-            # 🔥 сообщение ожидания
             wait_msg = await msg.answer("⏳ Генерирую... 0%")
 
             result = ""
@@ -210,17 +207,21 @@ async def handle(msg: types.Message):
                     link = f"https://link.brawlstars.com/?tag={new_code}"
                     result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
 
-                # 🔥 обновление процентов
-                if count >= 10 and i % (count // 10) == 0:
+                # 🔥 ФИКС ПРОЦЕНТОВ
+                if count >= 10 and i % max(1, count // 5) == 0:
                     percent = int((i / count) * 100)
-                    await wait_msg.edit_text(f"⏳ Генерирую... {percent}%")
+                    try:
+                        await wait_msg.edit_text(f"⏳ Генерирую... {percent}%")
+                    except:
+                        pass
 
-                # 🔥 небольшая задержка
                 await asyncio.sleep(0.05)
 
-            await wait_msg.edit_text("⏳ Генерирую... 100%")
+            try:
+                await wait_msg.edit_text("⏳ Генерирую... 100%")
+            except:
+                pass
 
-            # 🔥 задержка перед отправкой (до 10 сек)
             await asyncio.sleep(min(3, count * 0.01))
 
             filename = f"brawl_codes_{count}.txt"
