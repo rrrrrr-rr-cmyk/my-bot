@@ -1,6 +1,7 @@
 import json
 import os
 import asyncio
+import signal
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
@@ -31,6 +32,23 @@ online_users = set()
 # ===== УДАЛЕНИЕ WEBHOOK =====
 async def delete_webhook_on_start():
     await bot.delete_webhook(drop_pending_updates=True)
+
+# ===== УБИЙСТВО СТАРОГО ПРОЦЕССА =====
+PID_FILE = "bot.pid"
+
+def kill_old_process():
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, "r") as f:
+                old_pid = int(f.read())
+
+            print(f"Пытаюсь убить старый процесс: {old_pid}")
+            os.kill(old_pid, signal.SIGTERM)
+        except Exception as e:
+            print(f"Не удалось убить старый процесс: {e}")
+
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
 
 # ===== КОНВЕРТЕР =====
 class LongToCodeConverter:
@@ -189,7 +207,6 @@ async def handle(msg: types.Message):
                     link = f"https://link.brawlstars.com/?tag={new_code}"
                     result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
 
-            # 🔥 ОТПРАВКА ФАЙЛОМ
             filename = f"brawl_codes_{count}.txt"
             file = types.BufferedInputFile(result.encode(), filename=filename)
             await msg.answer_document(file)
@@ -231,6 +248,7 @@ async def web_server():
 
 # ===== MAIN =====
 async def main():
+    kill_old_process()  # 👈 ДОБАВЛЕНО
     await delete_webhook_on_start()
     await set_commands(bot)
     await web_server()
