@@ -19,7 +19,7 @@ def save_users(users):
     with open(USERS_FILE, "w") as f:
         json.dump(list(users), f)
 
-TOKEN = "7966858937:AAFHiAGQSv3rC5ATZb1s4zfoPHeAkDXwtYM"
+TOKEN = "7966858937:AAEJot3qSamrS36WDIhdm4C7Xp57JyJDne0"
 ADMIN_ID = 1085706185
 
 bot = Bot(token=TOKEN)
