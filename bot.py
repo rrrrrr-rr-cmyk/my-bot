@@ -186,8 +186,8 @@ async def handle(msg: types.Message):
                 cur_id = start_id + i
                 new_code = converter.to_code(cur_id)
                 if new_code:
-                    result += f"{i+1}. {new_code}\nID: {cur_id}\n\n"
-
+                  link = f"https://link.brawlstars.com/?tag={new_code}"
+                  result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
             await msg.answer(result[:4000], reply_markup=menu())
 
         elif text.upper().startswith("X"):
