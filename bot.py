@@ -1,11 +1,10 @@
-import json
-import os
 import asyncio
 import io
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
+from aiogram.exceptions import TelegramRetryAfter
 
 TOKEN = "7966858937:AAGwXAM-P5dwRvRCTAByvD2j4Wt6SI-lvZw"
 ADMIN_ID = 1085706185
@@ -16,6 +15,14 @@ dp = Dispatcher()
 users = set()
 online_users = set()
 user_modes = {}
+
+# ===== SAFE SEND =====
+async def safe_send(func, *args, **kwargs):
+    while True:
+        try:
+            return await func(*args, **kwargs)
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after)
 
 # ===== КНОПКИ =====
 def menu():
@@ -37,8 +44,7 @@ class LongToCodeConverter:
         res = []
         base = len(self.CHARS)
         while val > 0:
-            idx = val % base
-            res.insert(0, self.CHARS[idx])
+            res.insert(0, self.CHARS[val % base])
             val //= base
         return ''.join(res)
 
@@ -88,7 +94,7 @@ async def start(msg: types.Message):
     users.add(msg.from_user.id)
     online_users.add(msg.from_user.id)
 
-    await msg.answer(
+    await safe_send(msg.answer,
         "👋 Привет!\n\n"
         "Я бот, который поможет тебе работать с кодами команд в Brawl Stars 🎮\n\n"
         "С моей помощью ты можешь:\n"
@@ -99,12 +105,12 @@ async def start(msg: types.Message):
         "Я делаю всё быстро и точно. Выбери действие ниже 👇"
     )
 
-    await msg.answer("👇 Выбери действие:", reply_markup=menu())
+    await safe_send(msg.answer, "👇 Выбери действие:", reply_markup=menu())
 
 # ===== HELP =====
 @dp.message(Command("help"))
 async def help_cmd(msg: types.Message):
-    await msg.answer(
+    await safe_send(msg.answer,
         "📘 Как пользоваться:\n\n"
         "🔑 Код → ID\nXABC123\n\n"
         "🆔 ID → Код\n123456\n\n"
@@ -118,7 +124,7 @@ async def stats(msg: types.Message):
     if msg.from_user.id != ADMIN_ID:
         return
 
-    await msg.answer(
+    await safe_send(msg.answer,
         f"👥 Всего пользователей: {len(users)}\n"
         f"🟢 Онлайн: {len(online_users)}"
     )
@@ -126,23 +132,23 @@ async def stats(msg: types.Message):
 # ===== КНОПКИ =====
 @dp.callback_query()
 async def cb(call: types.CallbackQuery):
-    user_id = call.from_user.id
+    uid = call.from_user.id
 
     if call.data == "c2i":
-        user_modes[user_id] = "c2i"
-        await call.message.answer("Введи код")
+        user_modes[uid] = "c2i"
+        await safe_send(call.message.answer, "Введи код")
 
     elif call.data == "i2c":
-        user_modes[user_id] = "i2c"
-        await call.message.answer("Введи ID")
+        user_modes[uid] = "i2c"
+        await safe_send(call.message.answer, "Введи ID")
 
     elif call.data == "gen":
-        user_modes[user_id] = "gen"
-        await call.message.answer("Введи код и количество\nПример:\nXA 10")
+        user_modes[uid] = "gen"
+        await safe_send(call.message.answer, "Введи код и количество\nПример:\nXA 10")
 
     await call.answer()
 
-# ===== ЛОГИКА (ИСПРАВЛЕННАЯ) =====
+# ===== ЛОГИКА =====
 @dp.message()
 async def handle(msg: types.Message):
     text = msg.text.strip()
@@ -150,26 +156,26 @@ async def handle(msg: types.Message):
     mode = user_modes.get(msg.from_user.id)
 
     if mode not in ["gen", "c2i", "i2c"]:
-        await msg.answer("❌ Сначала нажми кнопку 👇", reply_markup=menu())
+        await safe_send(msg.answer, "❌ Сначала нажми кнопку 👇", reply_markup=menu())
         return
 
     # ===== ГЕНЕРАЦИЯ =====
     if mode == "gen":
         if len(parts) != 2:
-            await msg.answer("❌ Введи: код и количество\nПример:\nXA 10", reply_markup=menu())
+            await safe_send(msg.answer, "❌ Пример: XA 10", reply_markup=menu())
             return
 
         code = parts[0].upper()
 
         if not parts[1].isdigit():
-            await msg.answer("❌ Количество должно быть числом", reply_markup=menu())
+            await safe_send(msg.answer, "❌ Количество должно быть числом", reply_markup=menu())
             return
 
         count = int(parts[1])
 
         start_id = converter.to_id(code)
         if start_id == -1:
-            await msg.answer("❌ Неверный код", reply_markup=menu())
+            await safe_send(msg.answer, "❌ Неверный код", reply_markup=menu())
             return
 
         result = ""
@@ -186,10 +192,10 @@ async def handle(msg: types.Message):
         file = io.BytesIO(result.encode())
         file.name = f"codes_{count}.txt"
 
-        await msg.answer_document(file)
+        await safe_send(msg.answer_document, file)
 
         user_modes[msg.from_user.id] = None
-        await msg.answer("👇 Выбери действие:", reply_markup=menu())
+        await safe_send(msg.answer, "👇 Выбери действие:", reply_markup=menu())
         return
 
     # ===== КОД → ID =====
@@ -197,9 +203,9 @@ async def handle(msg: types.Message):
         id_val = converter.to_id(text)
 
         if id_val == -1:
-            await msg.answer("❌ Неверный код", reply_markup=menu())
+            await safe_send(msg.answer, "❌ Неверный код", reply_markup=menu())
         else:
-            await msg.answer(f"ID: {id_val}", reply_markup=menu())
+            await safe_send(msg.answer, f"ID: {id_val}", reply_markup=menu())
 
         user_modes[msg.from_user.id] = None
         return
@@ -207,15 +213,15 @@ async def handle(msg: types.Message):
     # ===== ID → КОД =====
     elif mode == "i2c":
         if not text.isdigit():
-            await msg.answer("❌ Введи число", reply_markup=menu())
+            await safe_send(msg.answer, "❌ Введи число", reply_markup=menu())
             return
 
         code = converter.to_code(int(text))
 
         if not code:
-            await msg.answer("❌ Ошибка генерации", reply_markup=menu())
+            await safe_send(msg.answer, "❌ Ошибка генерации", reply_markup=menu())
         else:
-            await msg.answer(f"Код: {code}", reply_markup=menu())
+            await safe_send(msg.answer, f"Код: {code}", reply_markup=menu())
 
         user_modes[msg.from_user.id] = None
         return
