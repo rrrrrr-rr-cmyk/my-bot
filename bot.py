@@ -1,3 +1,5 @@
+import json
+import os
 import asyncio
 import io
 
@@ -35,7 +37,8 @@ class LongToCodeConverter:
         res = []
         base = len(self.CHARS)
         while val > 0:
-            res.insert(0, self.CHARS[val % base])
+            idx = val % base
+            res.insert(0, self.CHARS[idx])
             val //= base
         return ''.join(res)
 
@@ -87,18 +90,25 @@ async def start(msg: types.Message):
 
     await msg.answer(
         "👋 Привет!\n\n"
-        "Выбери действие 👇"
+        "Я бот, который поможет тебе работать с кодами команд в Brawl Stars 🎮\n\n"
+        "С моей помощью ты можешь:\n"
+        "🔑 преобразовать код команды в ID\n"
+        "🆔 преобразовать ID обратно в код\n"
+        "📈 генерировать следующие коды на основе твоего\n\n"
+        "Если что-то не понятно, напиши /help 📘\n"
+        "Я делаю всё быстро и точно. Выбери действие ниже 👇"
     )
-    await msg.answer("👇 Меню:", reply_markup=menu())
+
+    await msg.answer("👇 Выбери действие:", reply_markup=menu())
 
 # ===== HELP =====
 @dp.message(Command("help"))
 async def help_cmd(msg: types.Message):
     await msg.answer(
-        "📘 Примеры:\n\n"
-        "Код → ID:\nXABC123\n\n"
-        "ID → Код:\n123456\n\n"
-        "Генерация:\nXABC123 10",
+        "📘 Как пользоваться:\n\n"
+        "🔑 Код → ID\nXABC123\n\n"
+        "🆔 ID → Код\n123456\n\n"
+        "📈 Генерация\nXABC123 100",
         reply_markup=menu()
     )
 
@@ -109,30 +119,30 @@ async def stats(msg: types.Message):
         return
 
     await msg.answer(
-        f"👥 Пользователи: {len(users)}\n"
+        f"👥 Всего пользователей: {len(users)}\n"
         f"🟢 Онлайн: {len(online_users)}"
     )
 
 # ===== КНОПКИ =====
 @dp.callback_query()
 async def cb(call: types.CallbackQuery):
-    uid = call.from_user.id
+    user_id = call.from_user.id
 
     if call.data == "c2i":
-        user_modes[uid] = "c2i"
+        user_modes[user_id] = "c2i"
         await call.message.answer("Введи код")
 
     elif call.data == "i2c":
-        user_modes[uid] = "i2c"
+        user_modes[user_id] = "i2c"
         await call.message.answer("Введи ID")
 
     elif call.data == "gen":
-        user_modes[uid] = "gen"
+        user_modes[user_id] = "gen"
         await call.message.answer("Введи код и количество\nПример:\nXA 10")
 
     await call.answer()
 
-# ===== ЛОГИКА =====
+# ===== ЛОГИКА (ИСПРАВЛЕННАЯ) =====
 @dp.message()
 async def handle(msg: types.Message):
     text = msg.text.strip()
@@ -140,76 +150,75 @@ async def handle(msg: types.Message):
     mode = user_modes.get(msg.from_user.id)
 
     if mode not in ["gen", "c2i", "i2c"]:
-        await msg.answer("❌ Сначала нажми кнопку", reply_markup=menu())
+        await msg.answer("❌ Сначала нажми кнопку 👇", reply_markup=menu())
         return
 
-    try:
-        # ===== ГЕНЕРАЦИЯ =====
-        if mode == "gen":
-            if len(parts) != 2:
-                await msg.answer("❌ Пример: XA 10", reply_markup=menu())
-                return
-
-            code = parts[0].upper()
-
-            if not parts[1].isdigit():
-                await msg.answer("❌ Количество должно быть числом", reply_markup=menu())
-                return
-
-            count = int(parts[1])
-
-            start_id = converter.to_id(code)
-            if start_id == -1:
-                await msg.answer("❌ Неверный код", reply_markup=menu())
-                return
-
-            result = ""
-            for i in range(count + 1):
-                cur_id = start_id + i
-                new_code = converter.to_code(cur_id)
-
-                if not new_code:
-                    continue
-
-                link = f"https://link.brawlstars.com/?tag={new_code}"
-                result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
-
-            file = io.BytesIO(result.encode())
-            file.name = f"codes_{count}.txt"
-
-            await msg.answer_document(file)
-
-            user_modes[msg.from_user.id] = None
-            await msg.answer("👇 Меню:", reply_markup=menu())
+    # ===== ГЕНЕРАЦИЯ =====
+    if mode == "gen":
+        if len(parts) != 2:
+            await msg.answer("❌ Введи: код и количество\nПример:\nXA 10", reply_markup=menu())
             return
 
-        # ===== КОД → ID =====
-        elif mode == "c2i":
-            id_val = converter.to_id(text)
+        code = parts[0].upper()
 
-            if id_val == -1:
-                await msg.answer("❌ Неверный код", reply_markup=menu())
-            else:
-                await msg.answer(f"ID: {id_val}", reply_markup=menu())
-
-            user_modes[msg.from_user.id] = None
+        if not parts[1].isdigit():
+            await msg.answer("❌ Количество должно быть числом", reply_markup=menu())
             return
 
-        # ===== ID → КОД =====
-        elif mode == "i2c":
-            if not text.isdigit():
-                await msg.answer("❌ Введи число", reply_markup=menu())
-                return
+        count = int(parts[1])
 
-            code = converter.to_code(int(text))
+        start_id = converter.to_id(code)
+        if start_id == -1:
+            await msg.answer("❌ Неверный код", reply_markup=menu())
+            return
+
+        result = ""
+        for i in range(count + 1):
+            cur_id = start_id + i
+            new_code = converter.to_code(cur_id)
+
+            if not new_code:
+                continue
+
+            link = f"https://link.brawlstars.com/?tag={new_code}"
+            result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
+
+        file = io.BytesIO(result.encode())
+        file.name = f"codes_{count}.txt"
+
+        await msg.answer_document(file)
+
+        user_modes[msg.from_user.id] = None
+        await msg.answer("👇 Выбери действие:", reply_markup=menu())
+        return
+
+    # ===== КОД → ID =====
+    elif mode == "c2i":
+        id_val = converter.to_id(text)
+
+        if id_val == -1:
+            await msg.answer("❌ Неверный код", reply_markup=menu())
+        else:
+            await msg.answer(f"ID: {id_val}", reply_markup=menu())
+
+        user_modes[msg.from_user.id] = None
+        return
+
+    # ===== ID → КОД =====
+    elif mode == "i2c":
+        if not text.isdigit():
+            await msg.answer("❌ Введи число", reply_markup=menu())
+            return
+
+        code = converter.to_code(int(text))
+
+        if not code:
+            await msg.answer("❌ Ошибка генерации", reply_markup=menu())
+        else:
             await msg.answer(f"Код: {code}", reply_markup=menu())
 
-            user_modes[msg.from_user.id] = None
-            return
-
-    except Exception as e:
-        print("ERROR:", e)
-        await msg.answer("❌ Ошибка", reply_markup=menu())
+        user_modes[msg.from_user.id] = None
+        return
 
 # ===== ЗАПУСК =====
 async def main():
