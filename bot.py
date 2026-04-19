@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramRetryAfter
 
-TOKEN = "7966858937:AAGwXAM-P5dwRvRCTAByvD2j4Wt6SI-lvZw"
+TOKEN = "7966858937:AAEecCC-qum2QnGtxEw0MO4URSE2TJgd73M"
 ADMIN_ID = 1085706185
 
 bot = Bot(token=TOKEN)
