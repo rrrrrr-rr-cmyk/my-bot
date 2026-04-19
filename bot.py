@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 
-TOKEN = "YOUR_NEW_TOKEN"
+TOKEN = "7966858937:AAGwXAM-P5dwRvRCTAByvD2j4Wt6SI-lvZw"
 ADMIN_ID = 1085706185
 
 bot = Bot(token=TOKEN)
