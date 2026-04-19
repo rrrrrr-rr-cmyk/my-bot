@@ -22,7 +22,7 @@ async def safe_send(func, *args, **kwargs):
         try:
             return await func(*args, **kwargs)
         except TelegramRetryAfter as e:
-            await asyncio.sleep(e.retry_after)
+            await asyncio.sleep(e.retry_after + 1)
 
 # ===== КНОПКИ =====
 def menu():
@@ -107,28 +107,6 @@ async def start(msg: types.Message):
 
     await safe_send(msg.answer, "👇 Выбери действие:", reply_markup=menu())
 
-# ===== HELP =====
-@dp.message(Command("help"))
-async def help_cmd(msg: types.Message):
-    await safe_send(msg.answer,
-        "📘 Как пользоваться:\n\n"
-        "🔑 Код → ID\nXABC123\n\n"
-        "🆔 ID → Код\n123456\n\n"
-        "📈 Генерация\nXABC123 100",
-        reply_markup=menu()
-    )
-
-# ===== STATS =====
-@dp.message(Command("stats"))
-async def stats(msg: types.Message):
-    if msg.from_user.id != ADMIN_ID:
-        return
-
-    await safe_send(msg.answer,
-        f"👥 Всего пользователей: {len(users)}\n"
-        f"🟢 Онлайн: {len(online_users)}"
-    )
-
 # ===== КНОПКИ =====
 @dp.callback_query()
 async def cb(call: types.CallbackQuery):
@@ -144,11 +122,11 @@ async def cb(call: types.CallbackQuery):
 
     elif call.data == "gen":
         user_modes[uid] = "gen"
-        await safe_send(call.message.answer, "Введи код и количество\nПример:\nXA 10")
+        await safe_send(call.message.answer, "Введи код и количество\nПример:\nXA 1000")
 
     await call.answer()
 
-# ===== ЛОГИКА =====
+# ===== ГЕНЕРАЦИЯ =====
 @dp.message()
 async def handle(msg: types.Message):
     text = msg.text.strip()
@@ -159,18 +137,12 @@ async def handle(msg: types.Message):
         await safe_send(msg.answer, "❌ Сначала нажми кнопку 👇", reply_markup=menu())
         return
 
-    # ===== ГЕНЕРАЦИЯ =====
     if mode == "gen":
-        if len(parts) != 2:
-            await safe_send(msg.answer, "❌ Пример: XA 10", reply_markup=menu())
+        if len(parts) != 2 or not parts[1].isdigit():
+            await safe_send(msg.answer, "❌ Пример: XA 1000", reply_markup=menu())
             return
 
         code = parts[0].upper()
-
-        if not parts[1].isdigit():
-            await safe_send(msg.answer, "❌ Количество должно быть числом", reply_markup=menu())
-            return
-
         count = int(parts[1])
 
         start_id = converter.to_id(code)
@@ -178,59 +150,26 @@ async def handle(msg: types.Message):
             await safe_send(msg.answer, "❌ Неверный код", reply_markup=menu())
             return
 
-        result = ""
-        for i in range(count + 1):
-            cur_id = start_id + i
-            new_code = converter.to_code(cur_id)
+        batch_size = 200  # 🔥 делим на части
 
-            if not new_code:
-                continue
+        for start in range(0, count + 1, batch_size):
+            result = ""
 
-            link = f"https://link.brawlstars.com/?tag={new_code}"
-            result += f"{i+1}. {new_code}\nID: {cur_id}\n🔗 {link}\n\n"
+            for i in range(start, min(start + batch_size, count + 1)):
+                cur_id = start_id + i
+                new_code = converter.to_code(cur_id)
 
-        file = io.BytesIO(result.encode())
-        file.name = f"codes_{count}.txt"
+                if not new_code:
+                    continue
 
-        await safe_send(msg.answer_document, file)
+                link = f"https://link.brawlstars.com/?tag={new_code}"
+                result += f"{i+1}. {new_code}\n🔗 {link}\n\n"
+
+            file = io.BytesIO(result.encode())
+            file.name = f"codes_{start}_{start+batch_size}.txt"
+
+            await safe_send(msg.answer_document, file)
+            await asyncio.sleep(1)  # 🔥 анти-флуд
 
         user_modes[msg.from_user.id] = None
         await safe_send(msg.answer, "👇 Выбери действие:", reply_markup=menu())
-        return
-
-    # ===== КОД → ID =====
-    elif mode == "c2i":
-        id_val = converter.to_id(text)
-
-        if id_val == -1:
-            await safe_send(msg.answer, "❌ Неверный код", reply_markup=menu())
-        else:
-            await safe_send(msg.answer, f"ID: {id_val}", reply_markup=menu())
-
-        user_modes[msg.from_user.id] = None
-        return
-
-    # ===== ID → КОД =====
-    elif mode == "i2c":
-        if not text.isdigit():
-            await safe_send(msg.answer, "❌ Введи число", reply_markup=menu())
-            return
-
-        code = converter.to_code(int(text))
-
-        if not code:
-            await safe_send(msg.answer, "❌ Ошибка генерации", reply_markup=menu())
-        else:
-            await safe_send(msg.answer, f"Код: {code}", reply_markup=menu())
-
-        user_modes[msg.from_user.id] = None
-        return
-
-# ===== ЗАПУСК =====
-async def main():
-    print("Бот запущен 🚀")
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
